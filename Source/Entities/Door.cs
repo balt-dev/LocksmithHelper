@@ -22,7 +22,7 @@ public class Door : Solid {
 
         public readonly Complex? Cost(Complex copyMult, bool force = false) {
             var invCount = Key.Inventory[Color].Count;
-            if (Value == null) return invCount == 0 ? 0 : null;
+            if (Value == null) return invCount == 0 || force ? 0 : null;
             var value = (Complex) Value;
             if (invCount == 0 && !force) return null;
             #pragma warning disable CS1718
