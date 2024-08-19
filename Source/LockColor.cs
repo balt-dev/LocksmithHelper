@@ -43,10 +43,12 @@ public static class LockExt {
         if (Settings.Instance.DisableFlashes)
             glitchMul = 0.7f;
         else
-            glitchMul = Calc.Random.NextFloat(0.6f) + 0.4f;
-        var glitchCol = (Entities.Door.LastSpentColor != null && !rawGlitch ?
-                ToColor((LockColor) Entities.Door.LastSpentColor) ?? new(0xA0, 0xA0, 0xA0) :
-                new(0xA0, 0xA0, 0xA0)) * glitchMul;
+            glitchMul = Calc.Random.NextFloat(0.6f) + 0.6f;
+        var glitchCol = (
+            Entities.Door.LastSpentColor != null && !rawGlitch
+                ? ForceToColor((LockColor) Entities.Door.LastSpentColor, true)
+                : new(0xA0, 0xA0, 0xA0)
+            ) * glitchMul;
         glitchCol.A = 255;
         return ToColor(self) ?? self switch {
             LockColor.Glitch => glitchCol,

@@ -16,37 +16,49 @@ namespace Celeste.Mod.LocksmithHelper.Entities;
 [Tracked]
 public class Door : Solid {
     public struct Requirement {
-        public Complex Value;
+        public Complex? Value;
         public LockColor Color;
         public Rectangle? DrawBox;
 
-        public readonly Complex? Cost(Complex copyMult) {
+        public readonly Complex? Cost(Complex copyMult, bool force = false) {
             var invCount = Key.Inventory[Color].Count;
+            if (Value == null) return invCount == 0 ? 0 : null;
+            var value = (Complex) Value;
+            if (invCount == 0 && !force) return null;
             #pragma warning disable CS1718
-            if (Value != Value) // NaN == All
-                return invCount != 0 ? invCount : null;
+            if (value != value) // NaN == All
+                return invCount;
             #pragma warning restore CS1718
-            Complex cost;
-            if (Value.Real == double.PositiveInfinity)
-                cost = new(invCount.Real, 0);
-            else if (Value.Real == double.NegativeInfinity)
-                cost = new(-invCount.Real, 0);
-            else if (Value.Imaginary == double.PositiveInfinity)
-                cost = new(0, invCount.Imaginary);
-            else if (Value.Imaginary == double.NegativeInfinity)
-                cost = new(0, -invCount.Imaginary);
-            else {
-                cost = Value;
-            }
-            cost *= copyMult;
-            return SameSignAndAbsGeq(invCount.Real, cost.Real)
-                && SameSignAndAbsGeq(invCount.Imaginary, cost.Imaginary)
+            if (double.IsInfinity(value.Real))
+                return SameSignAndAbsGeq(invCount.Real, double.Sign(value.Real)) || force
+                    ? new Complex(invCount.Real, 0) * copyMult
+                    : null;
+            else if (double.IsInfinity(value.Imaginary))
+                return SameSignAndAbsGeq(invCount.Imaginary, double.Sign(value.Imaginary)) || force
+                    ? new Complex(0, invCount.Imaginary) * copyMult
+                    : null;
+            Complex cost = value * copyMult;
+            return (SameSignAndAbsGeq(invCount.Real, cost.Real)
+                && SameSignAndAbsGeq(invCount.Imaginary, cost.Imaginary))
+                || force
                 ? cost
                 : null;
         }
 
         private static bool SameSignAndAbsGeq(double a, double b) {
-            return Math.Sign(a) == Math.Sign(b) && Math.Abs(a) >= Math.Abs(b);
+            return b == 0 || (a != 0 && Math.Sign(a) == Math.Sign(b) && Math.Abs(a) >= Math.Abs(b));
+        }
+    }
+
+    public override void DebugRender(Camera camera) {
+        base.DebugRender(camera);
+        for (var i = 0; i < _requirements.Count; i++) {
+            var req = GetRequirement(i);
+            var center = (
+                req.DrawBox ?? new Rectangle(6, 6, (int) Width - 12, (int) Height - 12)
+            ).Center.ToVector2();
+            DrawComplex(req.Value ?? 0, Position + center - Vector2.UnitY * 6, Color.Blue);
+            DrawComplex((Complex) req.Cost(CopyMult, true), Position + center, req.Cost(CopyMult) != null ? Color.Green : Color.Red);
         }
     }
 
@@ -138,6 +150,7 @@ public class Door : Solid {
     public Door(EntityData data, Vector2 offset)
         : base(data.Position + offset, data.Width, data.Height, false)
     {
+        Safe = false;
         Eroded = data.Bool("eroded");
         Frozen = data.Bool("frozen");
         Painted = data.Bool("painted");
@@ -171,14 +184,18 @@ public class Door : Solid {
                 reqValueString = reqValueString[..atIndex].Trim();
                 reqBox = new Rectangle(box[0], box[1], box[2], box[3]);
             }
-            Complex reqValue;
+            Complex? reqValue;
             var blast = false;
-            if (reqValueString.StartsWith("All")) {
+            if (reqValueString == "blank") {
+                reqValue = null;
+                goto End;
+            }
+            if (reqValueString == "all") {
                 reqValue = Complex.NaN;
                 goto End;
             }
-            if (reqValueString.StartsWith("Blast")) {
-                reqValueString = reqValueString[5..].Trim();
+            if (reqValueString.EndsWith("x")) {
+                reqValueString = reqValueString.TrimEnd('x');
                 blast = true;
             }
             try {
@@ -197,7 +214,7 @@ public class Door : Solid {
                     reqValue = new Complex(0, float.NegativeInfinity);
                 else
                     throw new Exception($"Blast door must have unit vector as value in \"{requirement}\"");
-            _visualRequirementSum += reqValue;
+            _visualRequirementSum += reqValue ?? 0;
         End:
             _requirements.Add(new Requirement { Value = reqValue, Color = reqColor, DrawBox = reqBox});
         }
@@ -206,15 +223,13 @@ public class Door : Solid {
         OnCollide = TryOpen;
     }
 
-    private bool AnyPure {
-        get {
-            if (_spend == LockColor.Pure)
+    private bool AnyIsColor(LockColor color) {
+        if (_spend == color)
+            return true;
+        for (int i = 0; i < _requirements.Count; i++)
+            if (GetRequirement(i).Color == color)
                 return true;
-            for (int i = 0; i < _requirements.Count; i++)
-                if (GetRequirement(i).Color == LockColor.Pure)
-                    return true;
-            return false;
-        }
+        return false;
     }
 
     // TODO: Clean this code up, it sucks.
@@ -234,7 +249,7 @@ public class Door : Solid {
             Audio.Play("event:/game/04_cliffside/snowball_impact");
             Cooldown = 0.05f;
         }
-        if (!Cursed && !AnyPure && Key.Inventory[LockColor.Brown].Count.Real > 0) {
+        if (!Cursed && !AnyIsColor(LockColor.Brown) && Key.Inventory[LockColor.Brown].Count.Real > 0) {
             Cursed = true;
             Audio.Play("event:/game/03_resort/fallblock_wood_shake");
             Cooldown = 0.05f;
@@ -249,12 +264,11 @@ public class Door : Solid {
     private static Complex ViewMult => LocksmithHelperModule.ImaginaryView ? Complex.ImaginaryOne : Complex.One; 
 
     public void TryOpen(Vector2 pos) {
-
-        if (CollideFirst<Player>(pos) == null) return;
         if (Cooldown > 0) return;
+        if (Eroded || Painted || Frozen) return;
 
         var oldCopies = Copies;
-        if (LocksmithHelperModule.MasterKeyReady && !AnyPure && Key.Inventory[LockColor.Master].Count.RealWithView() != 0) {
+        if (LocksmithHelperModule.MasterKeyReady && !AnyIsColor(LockColor.Master) && !AnyIsColor(LockColor.Pure) && Key.Inventory[LockColor.Master].Count.RealWithView() != 0) {
             var rotatedCount = Key.Inventory[LockColor.Master].Count * ViewMult;
             var spentKeys = new Complex(Math.Sign(rotatedCount.Real), 0) / ViewMult;
             Copies -= spentKeys;
@@ -292,7 +306,6 @@ public class Door : Solid {
             var req = GetRequirement(i);
             Complex copyMul = imag ? new(0, CopyMult.Imaginary) : new(CopyMult.Real, 0);
             var cost = req.Cost(copyMul);
-            Logger.Log(LogLevel.Info, "!", $"{req.Value} {cost} {totalCost} {Copies}");
             if (cost == null) return false;
 
             totalCost += (Complex) cost;
@@ -351,18 +364,28 @@ public class Door : Solid {
         DrawDeferredRects();
         
         bool? anySigils = null;
+        Complex requirementSum = 0;
         foreach (var req in _requirements) {
             anySigils ??= false;
             Rectangle rect = req.DrawBox ?? new Rectangle(6, 6, (int) Width - 12, (int) Height - 12);
-            DrawSlices((req.Value.RealWithView() * VisualCopyUnit) < 0 ? doorInlineInverse : doorInline, X + rect.X, Y + rect.Y, rect.Width, rect.Height);
-            if ((req.Value * CopyMult).RealWithView() != 0) {
+            var displayValue = ((req.Value ?? 0) * CopyMult).RealWithView();
+            DrawSlices(displayValue < 0 ? doorInlineInverse : doorInline, X + rect.X, Y + rect.Y, rect.Width, rect.Height);
+            if (req.Value == null) {
                 anySigils = true;
-                RenderSigil(Position + rect.Center.ToVector2(), req.Value);
+                continue;
+            }
+            var value = (Complex) req.Value;
+            if ((!double.IsNaN(displayValue) || (double.IsNaN(value.Real) && double.IsNaN(value.Real))) && displayValue != 0) {
+                requirementSum += double.IsFinite(value.Real)
+                    && double.IsFinite(value.Imaginary)
+                    ? value
+                    : Complex.IsNaN(value) ? 0 : new Complex(Math.Sign(value.Real), Math.Sign(value.Imaginary));
+                anySigils |= RenderSigil(Position + rect.Center.ToVector2(), value * CopyMult);
             }
         }
         
         DrawSlices(
-            (_visualRequirementSum * VisualCopyUnit).RealWithView() < 0 || (anySigils == false) ? doorOutlineInverse : doorOutline,
+            (requirementSum * CopyMult).RealWithView() < 0 || (anySigils == false) ? doorOutlineInverse : doorOutline,
             X, Y, Width, Height,
             anySigils == false ? ColorExt.ColorFromHSV(Scene.TimeActive / 8, 1, 1) : Color.White
         );
@@ -433,6 +456,12 @@ public class Door : Solid {
     }
 
     public static void DrawComplex(Complex value, Vector2 center, Color color, bool outline = false, bool mult = false, bool centered = true) {
+        if (double.IsInfinity(value.Real))
+            value = new(double.CopySign(808f, value.Real), value.Imaginary);
+        if (double.IsInfinity(value.Imaginary))
+            value = new(value.Real, double.CopySign(808f, value.Imaginary));
+        if (value != value)
+            value = new(12345, 54321);
         var valueStr = value.AsString();
         if (mult)
             valueStr = "x" + valueStr;
@@ -449,8 +478,9 @@ public class Door : Solid {
                     '-' => Minus,
                     'x' => Times,
                     'i' => I,
-                    _ => new()
+                    _ => null
                 };
+            if (sprite == null) continue;
             
             if (outline)
                 sprite.DrawOutlineCentered(new(x, center.Y), color);
@@ -557,12 +587,12 @@ public class Door : Solid {
     private void RenderColor(float x, float y, float width, float height, LockColor color) =>
         DeferredRectangles.Add(new(x, y, width, height, color));
 
-    #pragma warning disable CS1718
-    private void RenderSigil(Vector2 center, Complex value)
+    private bool RenderSigil(Vector2 center, Complex value)
     {
         MTexture sprite;
-        value *= CopyMult;
-        if (value != value)
+        if (value.RealWithView() == 0) return false;
+
+        if (value.Real != value.Real && value.Imaginary != value.Imaginary)
             // NaN, so it's All
             sprite = All;
         else if (!double.IsFinite(value.RealWithView()))
@@ -571,10 +601,10 @@ public class Door : Solid {
             sprite = Keyhole;
         var sigilColor = value.RealWithView() < 0 ? Color.White : Color.Black;
         sprite.DrawCentered(center, sigilColor);
-        if (sprite != Keyhole || Math.Abs(value.Real) == 1) return;
-        DrawComplex(value , new(center.X, center.Y + 7), sigilColor);
+        if (sprite != Keyhole || Math.Abs(value.Real) == 1) return true;
+        DrawComplex(value, new(center.X, center.Y + 7), sigilColor);
+        return true;
     }
-    #pragma warning restore CS1718
 
     #endregion
 }

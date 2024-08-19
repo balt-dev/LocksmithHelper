@@ -9,4 +9,7 @@ public class LocksmithHelperModuleSettings : EverestModuleSettings {
     public ButtonBinding LensOfTruth {get; set;}
 
     public bool UseShaders {get; set;} = true;
+
+    [SettingNumberInput(false, 4)]
+    public float CounterY {get; set;} = 200;
 }

@@ -60,11 +60,13 @@ return {
                 love.graphics.rectangle("line", entity.x, entity.y, entity.width, entity.height)
                 for _, req in ipairs(reqTable) do
                     love.graphics.setColor(colorTable[req.color] or {1, 0, 1})
-                    local x, y, w, h = req.x or 6, req.y or 6, req.w or entity.width - 12, req.h or entity.width - 12
+                    local x, y, w, h = req.x or 6, req.y or 6, req.w or entity.width - 12, req.h or entity.height - 12
                     love.graphics.rectangle("fill", entity.x + x, entity.y + y, w, h)
                     love.graphics.setColor(0, 0, 0)
                     love.graphics.rectangle("line", entity.x + x, entity.y + y, w, h)
-                    drawing.printCenteredText(req.value, entity.x + x, entity.y + y, w, h, font, 1)
+                    if req.value ~= "blank" then
+                        drawing.printCenteredText(req.value, entity.x + x, entity.y + y, w, h, font, 1)
+                    end
                 end
 
                 if (entity.copies ~= "1") then
@@ -113,7 +115,7 @@ return {
                     if name == nil then
                         return false
                     end
-                    return colorTable[name] ~= nil and validateComplex(value)
+                    return colorTable[name] ~= nil and (validateComplex(value) or value == "1x" or value == "-1x" or value == "ix" or value == "-ix" or value == "all" or value == "blank")
                 end
             }
         }

@@ -15,13 +15,13 @@ public class Counter : Entity {
     public Counter() {
         Tag = (int)Tags.HUD | (int)Tags.Global | (int)Tags.PauseUpdate | (int)Tags.TransitionUpdate;
         Depth = -100;
-        Y = 980;
+        Y = LocksmithHelperModule.LockSettings.CounterY;
     }
 
     public override void Update() {
         base.Update();
         textWidth = 0;
-        foreach (var kvp in Key.Inventory.Where(kvp => kvp.Value.Count != 0)) {
+        foreach (var kvp in Key.Inventory.Where(kvp => kvp.Value.Count != 0 || kvp.Value.Locked)) {
             textWidth += ActiveFont.Measure(kvp.Value.ToString()).X + 84;
         }
         visualWidth += (textWidth - visualWidth) * (1f - (float) Math.Pow(0.0001, Engine.RawDeltaTime));
@@ -31,12 +31,16 @@ public class Counter : Entity {
     private float visualWidth = 0;
 
     public override void Render() {
-        var x = visualWidth - textWidth;
-        foreach (var kvp in Key.Inventory.Where(kvp => kvp.Value.Count != 0)) {
-            key.Draw(new(x, Y), Vector2.Zero, kvp.Key.ForceToColor());
-            x += 64;
-            ActiveFont.DrawOutline(kvp.Value.ToString(), new(x, Y), Vector2.Zero, Vector2.One, Color.White, 2, Color.Black);
-            x += ActiveFont.Measure(kvp.Value.ToString()).X + 20;
+        if (visualWidth - bg.Width * 2 > 0)
+            Draw.Rect(0, Y, visualWidth - bg.Width * 2 + 4, bg.Height * 2, Color.Black);
+        bg.Draw(new(visualWidth - bg.Width * 2, Y), Vector2.Zero, Color.White, 2);
+
+        X = visualWidth - textWidth;
+        foreach (var kvp in Key.Inventory.Where(kvp => kvp.Value.Count != 0 || kvp.Value.Locked)) {
+            key.Draw(new(X, Y), Vector2.Zero, kvp.Key.ForceToColor(true));
+            X += 64;
+            ActiveFont.DrawOutline(kvp.Value.ToString(), new(X, Y), Vector2.Zero, Vector2.One, Color.White, 2, Color.Black);
+            X += ActiveFont.Measure(kvp.Value.ToString()).X + 20;
         }
     }
 }
