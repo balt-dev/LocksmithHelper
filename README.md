@@ -2,7 +2,7 @@
 
 Puts the keys and doors from [I Wanna Lockpick by LAWatson](https://lawatson.itch.io/i-wanna-lockpick) into Celeste!
 
-Sample video: [![LocksmithHelper Example](https://img.youtube.com/vi/t6eDDkViZEk/0.jpg)](https://youtu.be/t6eDDkViZEk "LocksmithHelper Example")
+[![LocksmithHelper Example](https://img.youtube.com/vi/t6eDDkViZEk/0.jpg)](https://youtu.be/t6eDDkViZEk "LocksmithHelper Example")
 
 ![Madeline standing with keys and doors from I Wanna Lockpick of many colors and shapes](image.png)
 
