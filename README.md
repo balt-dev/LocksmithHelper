@@ -16,7 +16,7 @@ Examples of valid locks:
 ```
 Cyan: 2
 Pink: -3+4i
-White: 0 (unopenable without a master key)
+White: 0 (opens if you have any keys)
 Pink: 6 @ 6 6 18 18 (x, y, width, height)
 Cyan: i
 ```
