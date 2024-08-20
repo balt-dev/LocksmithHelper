@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Text;
+using Celeste.Mod.LocksmithHelper.Entities;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Monocle;
@@ -17,16 +18,14 @@ public class LocksmithHelperModule : EverestModule {
         Instance = this;
 #if DEBUG
         // debug builds use verbose logging
-        Logger.SetLogLevel(nameof(LocksmithHelperModule), LogLevel.Verbose);
+        Logger.SetLogLevel(nameof(LocksmithHelper), LogLevel.Verbose);
 #else
         // release builds use info logging to reduce spam in log files
-        Logger.SetLogLevel(nameof(LocksmithHelperModule), LogLevel.Info);
+        Logger.SetLogLevel(nameof(LocksmithHelper), LogLevel.Info);
 #endif
     }
 
     public override void Load() {
-        // TODO: apply any hooks that should always be active
-        On.Celeste.Level.ctor += OnCreate;
         On.Celeste.Level.Update += OnUpdate;
         On.Celeste.Level.LoadLevel += OnLoad;
         On.Celeste.Player.Update += OnPlayerUpdate;
@@ -34,8 +33,6 @@ public class LocksmithHelperModule : EverestModule {
     }
 
     public override void Unload() {
-        // TODO: unapply any hooks applied in Load()
-        On.Celeste.Level.ctor -= OnCreate;
         On.Celeste.Level.Update -= OnUpdate;
         On.Celeste.Level.LoadLevel -= OnLoad;
         On.Celeste.Player.Update -= OnPlayerUpdate;
@@ -59,20 +56,14 @@ public class LocksmithHelperModule : EverestModule {
         MasterKeyReady = false;
     }
 
-    private static void OnCreate(On.Celeste.Level.orig_ctor orig, Level self)
-    {
-        orig(self);
-        UpdateShaders(self);
-    }
-
+    public static int AtlasOffset { get; internal set; } = 0;
 
     private static void OnUpdate(On.Celeste.Level.orig_Update orig, Level self)
     {
         orig(self);
-        UpdateShaders(self);
 
-        if (LockSettings.ReadyMaster.Pressed) {
-            LockSettings.ReadyMaster.ConsumePress();
+        if (LockSettings.ReadyMasterKey.Pressed) {
+            LockSettings.ReadyMasterKey.ConsumePress();
             MasterKeyReady = !MasterKeyReady;
         }
 
@@ -80,14 +71,22 @@ public class LocksmithHelperModule : EverestModule {
             LockSettings.LensOfTruth.ConsumePress();
             ImaginaryView = !ImaginaryView;
         }
+
+        if (!Settings.Instance.DisableFlashes || self.OnInterval(0.4f)) {
+            // Random number from 0 to 4, exclusive, non-repeating
+            var value = Calc.Random.Next(3);
+            if (value >= AtlasOffset)
+                value += 1;
+            AtlasOffset = value;
+        }
     }
 
     private static void OnPlayerRender(On.Celeste.Player.orig_Render orig, Player self)
     {
         if (MasterKeyReady) {
-            var keyWillCopy = Entities.Key.Inventory[LockColor.Master].Count.Real < 0;
+            var keyWillCopy = Entities.Key.Inventory[LockColor.Master].Count.RealWithView() < 0;
             Draw.Rect(self.TopCenter.X - 2, self.TopCenter.Y - 12, 4, 4, keyWillCopy ? Color.White : Color.Black);
-            var color = LockColor.Master.ForceToColor();
+            var color = LockColor.Master.ToColor();
             if (keyWillCopy)
                 color = new(255 - color.R, 255 - color.G, 255 - color.B);
             Draw.Rect(self.TopCenter.X - 1, self.TopCenter.Y - 11, 2, 2, color);
@@ -114,50 +113,34 @@ public class LocksmithHelperModule : EverestModule {
             );
         if (Entities.Key.Inventory[LockColor.Red].Count.Real >= 1)
             self.SceneAs<Level>().ParticlesFG.Emit(
-                new(Entities.Door.CurseParticle) {Color = LockColor.Red.ForceToColor() * 0.3f},
+                new(Entities.Door.CurseParticle) {Color = LockColor.Red.ToColor() * 0.3f},
                 self.Center + new Vector2(Calc.Random.NextFloat(32) - 16, Calc.Random.NextFloat(32) - 16)
             );
         if (Entities.Key.Inventory[LockColor.Green].Count.Real >= 5)
             self.SceneAs<Level>().ParticlesFG.Emit(
-                new(Entities.Door.CurseParticle) {Color = LockColor.Green.ForceToColor() * 0.3f},
+                new(Entities.Door.CurseParticle) {Color = LockColor.Green.ToColor() * 0.3f},
                 self.Center + new Vector2(Calc.Random.NextFloat(32) - 16, Calc.Random.NextFloat(32) - 16)
             );
         if (Entities.Key.Inventory[LockColor.Blue].Count.Real >= 3)
             self.SceneAs<Level>().ParticlesFG.Emit(
-                new(Entities.Door.CurseParticle) {Color = LockColor.Blue.ForceToColor() * 0.3f},
+                new(Entities.Door.CurseParticle) {Color = LockColor.Blue.ToColor() * 0.3f},
                 self.Center + new Vector2(Calc.Random.NextFloat(32) - 16, Calc.Random.NextFloat(32) - 16)
             );
-    }
-
-    private static void UpdateShaders(Level self) {
-        MasterFx.Parameters["Time"].SetValue(self.TimeActive);
-        PureFx.Parameters["Time"].SetValue(self.TimeActive);
-        GlitchFx.Parameters["Time"].SetValue(self.TimeActive);
-        GlitchFx.Parameters["Photosensitive"].SetValue(Settings.Instance.DisableFlashes);
-        GlitchFx.Parameters["MimicColor"].SetValue(Entities.Door.LastSpentColor?.ForceToColor().ToVector4() ?? Vector4.Zero);
-    }
-
-    public static Effect GlitchFx;
-    public static Effect MasterFx;
-    public static Effect PureFx;
-    public static Effect StoneFx;
-
-    public override void LoadContent(bool firstLoad)
-    {
-        base.LoadContent(firstLoad);
-        
-        // Due to NOT only doing this on firstLoad, this works with hot reloading!
-        GlitchFx = new Effect(Engine.Graphics.GraphicsDevice, Everest.Content.Get($"Shaders/glitch.cso", true).Data);
-        MasterFx = new Effect(Engine.Graphics.GraphicsDevice, Everest.Content.Get($"Shaders/master.cso", true).Data);
-        PureFx = new Effect(Engine.Graphics.GraphicsDevice, Everest.Content.Get($"Shaders/pure.cso", true).Data);
-        StoneFx = new Effect(Engine.Graphics.GraphicsDevice, Everest.Content.Get($"Shaders/stone.cso", true).Data);
     }
 
     public static bool _masterReady;
     public static bool _imaginaryView;
     public static bool MasterKeyReady {get => _masterReady; private set {
+        if (((Engine.Scene as Level)?.Tracker?.CountEntities<Entities.Door>() ?? 0) == 0) {
+            Logger.Log(LogLevel.Info, nameof(LocksmithHelper), "Tried to enable master key with no doors in room! Suppressing...");
+            _masterReady = false;
+            return;
+        }
         if (value == _masterReady) return;
-        if (Entities.Key.Inventory[LockColor.Master].Count.RealWithView() == 0) return;
+        if (Entities.Key.Inventory[LockColor.Master].Count.RealWithView() == 0) {
+            _masterReady = false;
+            return;
+        }
         if (value)
             Audio.Play("event:/game/03_resort/door_metal_open");
         else
@@ -167,6 +150,11 @@ public class LocksmithHelperModule : EverestModule {
 
     
     public static bool ImaginaryView {get => _imaginaryView; private set {
+        if (((Engine.Scene as Level)?.Tracker?.CountEntities<Entities.Door>() ?? 0) == 0) {
+            Logger.Log(LogLevel.Info, nameof(LocksmithHelper), "Tried to enable I-View with no doors in room! Suppressing...");
+            _imaginaryView = false;
+            return;
+        }
         if (value == _imaginaryView) return;
         if (value)
             Audio.Play("event:/game/general/assist_screenbottom");
@@ -175,6 +163,7 @@ public class LocksmithHelperModule : EverestModule {
         _imaginaryView = value;
         _masterReady = false;
     }}
+
 
     [Command("keys", "Shows the player's key inventory.")]
     public static void Inventory() {

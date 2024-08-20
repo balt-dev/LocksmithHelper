@@ -5,7 +5,6 @@ using Monocle;
 using System.Collections.Generic;
 using System;
 using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
 using System.Text;
 
 namespace Celeste.Mod.LocksmithHelper.Entities;
@@ -34,7 +33,12 @@ public class Key : Entity {
         GFX.Game["objects/LocksmithHelper/key/master_outline"],
         GFX.Game["objects/LocksmithHelper/key/star_outline"],
         GFX.Game["objects/LocksmithHelper/key/unstar_outline"],
-        GFX.Game["objects/LocksmithHelper/key/set_outline"]
+        GFX.Game["objects/LocksmithHelper/key/set_outline"],
+        GFX.Game["objects/LocksmithHelper/key/normal_glitch"],
+        null,
+        GFX.Game["objects/LocksmithHelper/key/star_glitch"],
+        GFX.Game["objects/LocksmithHelper/key/unstar_glitch"],
+        GFX.Game["objects/LocksmithHelper/key/set_glitch"],
     ];
 
     public Key(EntityData data, Vector2 offset)
@@ -47,6 +51,13 @@ public class Key : Entity {
         
         Collider = new Hitbox(16, 16);
         Add(new PlayerCollider(OnPlayer));
+    }
+
+    public override void Added(Scene scene) {
+        base.Added(scene);
+
+        if ((scene as Level).Tracker.CountEntities<Counter>() == 0)
+            scene.Add(new Counter());
     }
 
     public record InventorySlot {
@@ -75,10 +86,12 @@ public class Key : Entity {
             _ => 0
         };
 
-        var texture = textures[atlasIndex];
+        var texture = KeyColor == LockColor.Glitch 
+            ? new(textures[10 + atlasIndex], new(LocksmithHelperModule.AtlasOffset * 16, 0, 16, 16))
+            : textures[atlasIndex];
         var outline = textures[atlasIndex + 5];
 
-        texture.DrawCentered(Center, KeyColor.ForceToColor());
+        texture.DrawCentered(Center, KeyColor.ToColor());
         outline.DrawCentered(Center);
         if (Type != KeyType.Star && Type != KeyType.Unstar)
             Door.DrawComplex(Value, BottomRight - new Vector2(Value.AsString().Length * 4 - 2, 0), Color.White, true, Type == KeyType.Multiply, false);

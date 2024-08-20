@@ -90,6 +90,8 @@ public class Door : Solid {
     private static readonly MTexture FrozenBR = GFX.Game["objects/LocksmithHelper/door/frozen_br"];
     private static readonly MTexture Erosion = GFX.Game["objects/LocksmithHelper/door/erosion"];
     private static readonly MTexture Paint = GFX.Game["objects/LocksmithHelper/door/paint"];
+    private static readonly MTexture Gradient = GFX.Game["objects/LocksmithHelper/door/gradient"];
+    private static readonly MTexture Static = GFX.Game["objects/LocksmithHelper/door/static"];
    
 
     static Door() {
@@ -105,7 +107,7 @@ public class Door : Solid {
 
 
     public static readonly ParticleType CurseParticle = new() {
-        Color = LockColor.Brown.ForceToColor() * 0.3f,
+        Color = LockColor.Brown.ToColor() * 0.3f,
         FadeMode = ParticleType.FadeModes.Late,
         LifeMax = 2.5f,
         LifeMin = 1.3f,
@@ -249,7 +251,7 @@ public class Door : Solid {
             Audio.Play("event:/game/04_cliffside/snowball_impact");
             Cooldown = 0.05f;
         }
-        if (!Cursed && !AnyIsColor(LockColor.Brown) && Key.Inventory[LockColor.Brown].Count.Real > 0) {
+        if (!Cursed && !AnyIsColor(LockColor.Pure) && Key.Inventory[LockColor.Brown].Count.Real > 0) {
             Cursed = true;
             Audio.Play("event:/game/03_resort/fallblock_wood_shake");
             Cooldown = 0.05f;
@@ -275,7 +277,6 @@ public class Door : Solid {
 
             if (!Key.Inventory[LockColor.Master].Locked)
                 Key.Inventory[LockColor.Master].Count -= spentKeys;
-            LocksmithHelperModule._masterReady = false;
             goto End;
         }
 
@@ -286,10 +287,11 @@ public class Door : Solid {
         End:
         if (oldCopies != Copies) {
             Audio.Play("event:/game/general/wall_break_stone");
+            LocksmithHelperModule._masterReady = false;
             if (Copies == 0) {
                 LastSpentColor = Spend;
                 RemoveSelf();
-                BreakParticle.Color = Spend.ForceToColor();
+                BreakParticle.Color = Spend.ToColor();
                 for (var x = 0; x < Width; x += 8)
                     for (var y = 0; y < Height; y += 8)
                         (Scene as Level).ParticlesFG.Emit(BreakParticle, Position + new Vector2(x + 4, y + 4));
@@ -330,7 +332,6 @@ public class Door : Solid {
 
     #region Rendering
 
-    private readonly List<Tuple<float, float, float, float, LockColor>> DeferredRectangles = [];
 
     public override void Update()
     {
@@ -343,14 +344,13 @@ public class Door : Solid {
                     CurseParticle,
                     TopLeft + new Vector2((Width + 12) * Calc.Random.NextFloat() - 6, (Height + 12) * Calc.Random.NextFloat() - 6)
                 );
-        
+        if (Scene.OnInterval(0.4f))
+            PhotosensitiveRandomSeed = Calc.Random.Next();
     }
 
     private Complex CopyMult => new(Math.Sign(Copies.Real), Math.Sign(Copies.Imaginary));
-    private double VisualCopyUnit => Math.Sign(Copies.RealWithView());
 
     public override void Render() {
-        DeferredRectangles.Clear();
         RenderColor(X, Y, Width, Height, Cursed ? LockColor.Brown : _spend);
 
         for (int i = 0; i < _requirements.Count; i++) {
@@ -360,8 +360,6 @@ public class Door : Solid {
             Rectangle rect = req.DrawBox ?? new Rectangle(6, 6, (int) Width - 12, (int) Height - 12);
             RenderColor(X + rect.X, Y + rect.Y, rect.Width, rect.Height, req.Color);
         }
-
-        DrawDeferredRects();
         
         bool? anySigils = null;
         Complex requirementSum = 0;
@@ -491,103 +489,46 @@ public class Door : Solid {
         }
     }
 
-    private void DrawDeferredRects() {
-        if (!LocksmithHelperModule.LockSettings.UseShaders) {
-            foreach (var tup in DeferredRectangles) {
-                Draw.Rect(tup.Item1, tup.Item2, tup.Item3, tup.Item4, tup.Item5.ForceToColor());
-            }
-            return;
+    private static void RenderColor(float x, float y, float width, float height, LockColor color) {
+        var col = color.ToColor();
+        if (color is LockColor.Glitch) {
+            col *= 1.25f;
+            col.A = 255;
         }
-
-
-        // Draw deferred rectangles (so we only stop the GameplayRenderer once)
-        GameplayRenderer.End();
-        
-        List<int> normalRects = [];
-        var matrix = (Scene as Level).Camera?.Matrix ?? Matrix.Identity;
-        List<VertexPositionColorTexture> masterVerts = [];
-        List<int> masterIndices = [];
-        List<VertexPositionColorTexture> pureVerts = [];
-        List<int> pureIndices = [];
-        List<VertexPositionColorTexture> glitchVerts = [];
-        List<int> glitchIndices = [];
-        List<VertexPositionColorTexture> stoneVerts = [];
-        List<int> stoneIndices = [];
-        int index = 0;
-        foreach (var tup in DeferredRectangles) {
-            if (!(tup.Item5 is LockColor.Master or LockColor.Glitch or LockColor.Stone or LockColor.Pure)) {
-                normalRects.Add(index++);
-                continue;
-            }
-            var verts = tup.Item5 switch {
-                LockColor.Master => masterVerts,
-                LockColor.Glitch => glitchVerts,
-                LockColor.Stone => stoneVerts,
-                LockColor.Pure => pureVerts,
-                _ => []
-            };
-            var indices = tup.Item5 switch {
-                LockColor.Master => masterIndices,
-                LockColor.Glitch => glitchIndices,
-                LockColor.Stone => stoneIndices,
-                LockColor.Pure => pureIndices,
-                _ => []
-            };
-            var rectCount = verts.Count / 4;
-            verts.Add(new VertexPositionColorTexture (new(tup.Item1, tup.Item2, 0), Color.White, new(0, 0)));
-            verts.Add(new VertexPositionColorTexture (new(tup.Item1 + tup.Item3, tup.Item2, 0), Color.White, new(1, 0)));
-            verts.Add(new VertexPositionColorTexture (new(tup.Item1, tup.Item2 + tup.Item4, 0), Color.White, new(0, 1)));
-            verts.Add(new VertexPositionColorTexture (new(tup.Item1 + tup.Item3, tup.Item2 + tup.Item4, 0), Color.White, new(1, 1)));
-            indices.AddRange([0 + rectCount, 1 + rectCount, 2 + rectCount, 1 + rectCount, 3 + rectCount, 2 + rectCount]);
-            index++;
-        }
-        if (masterVerts.Count > 0)
-            GFX.DrawIndexedVertices(
-                matrix,
-                masterVerts.ToArray(),
-                masterVerts.Count,
-                masterIndices.ToArray(),
-                masterIndices.Count / 3,
-                LocksmithHelperModule.MasterFx
-            );
-        if (glitchIndices.Count > 0)
-            GFX.DrawIndexedVertices(
-                matrix,
-                glitchVerts.ToArray(),
-                glitchVerts.Count,
-                glitchIndices.ToArray(),
-                glitchIndices.Count / 3,
-                LocksmithHelperModule.GlitchFx
-            );
-        if (pureIndices.Count > 0)
-            GFX.DrawIndexedVertices(
-                matrix,
-                pureVerts.ToArray(),
-                pureVerts.Count,
-                pureIndices.ToArray(),
-                pureIndices.Count / 3,
-                LocksmithHelperModule.PureFx
-            );
-        if (stoneVerts.Count > 0)
-            GFX.DrawIndexedVertices(
-                matrix,
-                stoneVerts.ToArray(),
-                stoneVerts.Count,
-                stoneIndices.ToArray(),
-                stoneIndices.Count / 3,
-                LocksmithHelperModule.StoneFx
-            );
-        GameplayRenderer.Begin();
-        foreach (int idx in normalRects) {
-            var tup = DeferredRectangles[idx];
-            Draw.Rect(tup.Item1, tup.Item2, tup.Item3, tup.Item4, tup.Item5.ForceToColor());
-        }
+        Draw.Rect(x, y, width, height, col);
+        PostRender(x, y, width, height, color);
     }
 
-    private void RenderColor(float x, float y, float width, float height, LockColor color) =>
-        DeferredRectangles.Add(new(x, y, width, height, color));
+    private static int PhotosensitiveRandomSeed = 0;
 
-    private bool RenderSigil(Vector2 center, Complex value)
+    private static void PostRender(float x, float y, float width, float height, LockColor color) {
+        var rand = Settings.Instance.DisableFlashes
+            ? new(PhotosensitiveRandomSeed)
+            : Calc.Random;
+        if (color is LockColor.Pure or LockColor.Master)
+            Gradient.Draw(new(x, y), Vector2.Zero, Color.Black * 0.5f, new Vector2(width / 8, height / 256));
+        else if (color is LockColor.Glitch) {
+            for (var u = 0; u < width; u += 16)
+                for (var v = 0; v < width; v += 16)
+                    new MTexture(
+                        Static,
+                        rand.Next(0, Static.Width - 16),
+                        rand.Next(0, Static.Height - 16),
+                        Math.Min(16, (int) width - u), Math.Min(16, (int) height - v)
+                    ).Draw(new(x + u, y + v), Vector2.Zero, (color.IsDark() ? Color.White : Color.Black) * 0.3f);
+            if (LastSpentColor != null && LastSpentColor != LockColor.Glitch)
+                PostRender(x, y, width, height, (LockColor) LastSpentColor);
+        }
+        else if (color is LockColor.Stone)
+            for (var u = 0; u < width; u += 256)
+                for (var v = 0; v < width; v += 256)
+                    new MTexture(
+                        Static, 0, 0,
+                        Math.Min(256, (int) width - u), Math.Min(256, (int) height - v)
+                    ).Draw(new(x + u, y + v), Vector2.Zero, Color.Black * (Settings.Instance.DisableFlashes ? 0.05f : 0.3f));
+    }
+
+    private static bool RenderSigil(Vector2 center, Complex value)
     {
         MTexture sprite;
         if (value.RealWithView() == 0) return false;

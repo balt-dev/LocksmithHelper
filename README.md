@@ -8,7 +8,8 @@ Puts the keys and doors from [I Wanna Lockpick by LAWatson](https://lawatson.itc
 
 ## Usage
 
-In order to have a key count show up in the level, there needs to be a `Counter` entity somewhere in each room. 
+~~In order to have a key count show up in the level, there needs to be a `Counter` entity somewhere in each room. ~~
+> As of 0.2, `Counter`s are automatically added to rooms with any `Key`s.
 
 `Door` locks are specified in a comma-separated mapping of colors to complex values, optionally with a rectangle area where they are drawn.
 
