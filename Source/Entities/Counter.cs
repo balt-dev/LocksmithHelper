@@ -1,6 +1,5 @@
 
 using System;
-using System.Linq;
 using Celeste.Mod.Entities;
 using Microsoft.Xna.Framework;
 using Monocle;
@@ -25,9 +24,11 @@ public class Counter : Entity {
     public override void Update() {
         base.Update();
         textWidth = 0;
-        foreach (var kvp in Key.Inventory.Where(kvp => kvp.Value.Count != 0 || kvp.Value.Locked)) {
+        foreach (LockColor color in Enum.GetValues<LockColor>()) {
+            var slot = LocksmithHelperModule.LockSession.GetSlot(color);
+            if (slot.Count == 0 && !slot.Locked) continue;
             if (textWidth == 0) textWidth += 40;
-            textWidth += ActiveFont.Measure(kvp.Value.ToString()).X + 84;
+            textWidth += ActiveFont.Measure(slot.ToString()).X + 84;
         }
         visualWidth += (textWidth - visualWidth) * (1f - (float) Math.Pow(0.0001, Engine.RawDeltaTime));
     }
@@ -41,15 +42,17 @@ public class Counter : Entity {
         bg.Draw(new(visualWidth - bg.Width * 2, Y), Vector2.Zero, Color.White, 2);
 
         X = visualWidth - textWidth + (textWidth > 0 ? 20 : 0);
-        foreach (var kvp in Key.Inventory.Where(kvp => kvp.Value.Count != 0 || kvp.Value.Locked)) {
-            (kvp.Key switch {
+        foreach (LockColor color in Enum.GetValues<LockColor>()) {
+            var slot = LocksmithHelperModule.LockSession.GetSlot(color);
+            if (slot.Count == 0 && !slot.Locked) continue;
+            (color switch {
                 LockColor.Master => masterKey,
                 LockColor.Glitch => glitchKey,
                 _ => key
-            }).Draw(new(X, Y), Vector2.Zero, kvp.Key.ToColor(true));
+            }).Draw(new(X, Y), Vector2.Zero, color.ToColor(true));
             X += 64;
-            ActiveFont.DrawOutline(kvp.Value.ToString(), new(X, Y), Vector2.Zero, Vector2.One, Color.White, 2, Color.Black);
-            X += ActiveFont.Measure(kvp.Value.ToString()).X + 20;
+            ActiveFont.DrawOutline(slot.ToString(), new(X, Y), Vector2.Zero, Vector2.One, Color.White, 2, Color.Black);
+            X += ActiveFont.Measure(slot.ToString()).X + 20;
         }
     }
 }

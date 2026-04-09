@@ -13,6 +13,8 @@ public class LocksmithHelperModule : EverestModule {
 
     public override Type SettingsType => typeof(LocksmithHelperModuleSettings);
     public static LocksmithHelperModuleSettings LockSettings => (LocksmithHelperModuleSettings) Instance._Settings;
+    public override Type SessionType => typeof(LocksmithHelperModuleSession);
+    public static LocksmithHelperModuleSession LockSession => (LocksmithHelperModuleSession) Instance._Session;
 
     public LocksmithHelperModule() {
         Instance = this;
@@ -46,14 +48,14 @@ public class LocksmithHelperModule : EverestModule {
     }
 
     private static void Init() {
-        Entities.Door.LastSpentColor = null;
+        LockSession.LastSpentColor = null;
         foreach (LockColor color in Enum.GetValues<LockColor>()) {
-            Entities.Key.Inventory[color] = new() {
-                Count = 0,
-                Locked = false
-            };
+            var slot = LockSession.GetSlot(color);
+            slot.Count = 0;
+            slot.Locked = false;
         }
         MasterKeyReady = false;
+        ImaginaryView = false;
     }
 
     public static int AtlasOffset { get; internal set; } = 0;
@@ -84,7 +86,7 @@ public class LocksmithHelperModule : EverestModule {
     private static void OnPlayerRender(On.Celeste.Player.orig_Render orig, Player self)
     {
         if (MasterKeyReady) {
-            var keyWillCopy = Entities.Key.Inventory[LockColor.Master].Count.RealWithView() < 0;
+            var keyWillCopy = LockSession.GetSlot(LockColor.Master).Count.RealWithView() < 0;
             Draw.Rect(self.TopCenter.X - 2, self.TopCenter.Y - 12, 4, 4, keyWillCopy ? Color.White : Color.Black);
             var color = LockColor.Master.ToColor();
             if (keyWillCopy)
@@ -101,78 +103,63 @@ public class LocksmithHelperModule : EverestModule {
     {
         orig(self);
         if (!self.Scene.OnInterval(0.1f)) return;
-        if (Entities.Key.Inventory[LockColor.Brown].Count.Real > 0)
+        if (LockSession.GetSlot(LockColor.Brown).Count.Real > 0)
             self.SceneAs<Level>().ParticlesFG.Emit(
                 Entities.Door.CurseParticle,
                 self.Center + new Vector2(Calc.Random.NextFloat(32) - 16, Calc.Random.NextFloat(32) - 16)
             );
-        if (Entities.Key.Inventory[LockColor.Brown].Count.Real < 0)
+        if (LockSession.GetSlot(LockColor.Brown).Count.Real < 0)
             self.SceneAs<Level>().ParticlesFG.Emit(
                 new(Entities.Door.CurseParticle) {Color = new Color(0xff - 0xaa, 0xff - 0x60, 0xff - 0x15) * 0.3f},
                 self.Center + new Vector2(Calc.Random.NextFloat(32) - 16, Calc.Random.NextFloat(32) - 16)
             );
-        if (Entities.Key.Inventory[LockColor.Red].Count.Real >= 1)
+        if (LockSession.GetSlot(LockColor.Red).Count.Real >= 1)
             self.SceneAs<Level>().ParticlesFG.Emit(
                 new(Entities.Door.CurseParticle) {Color = LockColor.Red.ToColor() * 0.3f},
                 self.Center + new Vector2(Calc.Random.NextFloat(32) - 16, Calc.Random.NextFloat(32) - 16)
             );
-        if (Entities.Key.Inventory[LockColor.Green].Count.Real >= 5)
+        if (LockSession.GetSlot(LockColor.Green).Count.Real >= 5)
             self.SceneAs<Level>().ParticlesFG.Emit(
                 new(Entities.Door.CurseParticle) {Color = LockColor.Green.ToColor() * 0.3f},
                 self.Center + new Vector2(Calc.Random.NextFloat(32) - 16, Calc.Random.NextFloat(32) - 16)
             );
-        if (Entities.Key.Inventory[LockColor.Blue].Count.Real >= 3)
+        if (LockSession.GetSlot(LockColor.Blue).Count.Real >= 3)
             self.SceneAs<Level>().ParticlesFG.Emit(
                 new(Entities.Door.CurseParticle) {Color = LockColor.Blue.ToColor() * 0.3f},
                 self.Center + new Vector2(Calc.Random.NextFloat(32) - 16, Calc.Random.NextFloat(32) - 16)
             );
     }
 
-    public static bool _masterReady;
-    public static bool _imaginaryView;
-    public static bool MasterKeyReady {get => _masterReady; private set {
+    public static bool MasterKeyReady {get => LockSession.MasterKeyEnabled; private set {
         if (((Engine.Scene as Level)?.Tracker?.CountEntities<Entities.Door>() ?? 0) == 0) {
             Logger.Log(LogLevel.Info, nameof(LocksmithHelper), "Tried to enable master key with no doors in room! Suppressing...");
-            _masterReady = false;
+            LockSession.MasterKeyEnabled = false;
             return;
         }
-        if (value == _masterReady) return;
-        if (Entities.Key.Inventory[LockColor.Master].Count.RealWithView() == 0) {
-            _masterReady = false;
+        if (value == LockSession.MasterKeyEnabled) return;
+        if (LockSession.GetSlot(LockColor.Master).Count.RealWithView() == 0) {
+            LockSession.MasterKeyEnabled = false;
             return;
         }
         if (value)
             Audio.Play("event:/game/03_resort/door_metal_open");
         else
             Audio.Play("event:/game/03_resort/door_metal_close");
-        _masterReady = value;
+        LockSession.MasterKeyEnabled = value;
     }}
 
     
-    public static bool ImaginaryView {get => _imaginaryView; private set {
+    public static bool ImaginaryView {get => LockSession.LensOfTruthEnabled; private set {
         if (((Engine.Scene as Level)?.Tracker?.CountEntities<Entities.Door>() ?? 0) == 0) {
             Logger.Log(LogLevel.Info, nameof(LocksmithHelper), "Tried to enable I-View with no doors in room! Suppressing...");
-            _imaginaryView = false;
+            LockSession.LensOfTruthEnabled = false;
             return;
         }
-        if (value == _imaginaryView) return;
+        if (value == LockSession.LensOfTruthEnabled) return;
         if (value)
             Audio.Play("event:/game/general/assist_screenbottom");
         else
             Audio.Play("event:/game/04_cliffside/whiteblock_fallthru");
-        _imaginaryView = value;
-        _masterReady = false;
+        LockSession.LensOfTruthEnabled = value;
     }}
-
-
-    [Command("keys", "Shows the player's key inventory.")]
-    public static void Inventory() {
-        StringBuilder sb = new("Inventory:");
-        foreach (var kvp in Entities.Key.Inventory) {
-            sb.Append($" {kvp.Key.ToString()}: {kvp.Value.Count.AsString()}");
-            if (kvp.Value.Locked)
-                sb.Append(" (Locked)");
-        }
-        Engine.Commands.Log(sb.ToString());
-    }
 }

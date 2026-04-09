@@ -60,21 +60,6 @@ public class Key : Entity {
             scene.Add(new Counter());
     }
 
-    public record InventorySlot {
-        public required Complex Count {get; set;}
-        public required bool Locked {get; set;}
-
-        public override string ToString() {
-            StringBuilder sb = new(Count.AsString());
-            if (Locked)
-                sb.Append('*');
-            return sb.ToString();
-        }
-    };
-
-    public static readonly Dictionary<LockColor, InventorySlot> Inventory = [];
-
-
     public override void Render() {
         base.Render();
 
@@ -93,8 +78,8 @@ public class Key : Entity {
 
         texture.DrawCentered(Center, KeyColor.ToColor());
         outline.DrawCentered(Center);
-        if (Type != KeyType.Star && Type != KeyType.Unstar)
-            Door.DrawComplex(Value, BottomRight - new Vector2(Value.AsString().Length * 4 - 2, 0), Color.White, true, Type == KeyType.Multiply, false);
+        if (Type != KeyType.Star && Type != KeyType.Unstar && (Value != 1 || Type == KeyType.Set))
+            Door.DrawComplex(Value, BottomRight - new Vector2(Value.AsString().Length * 4 - 2, 0), Color.White, true, Type, false);
     }
 
     private void OnPlayer(Player player) {
@@ -105,9 +90,9 @@ public class Key : Entity {
             (Scene as Level).ParticlesFG.Emit(StrawberrySeed.P_Burst, 1, Position + new Vector2(8, 8) + Calc.AngleToVector(num, 4f), Vector2.Zero, num);
         }
 
-        var color = KeyColor == LockColor.Glitch ? Door.LastSpentColor ?? KeyColor : KeyColor;
+        var color = KeyColor == LockColor.Glitch ? LocksmithHelperModule.LockSession.LastSpentColor ?? KeyColor : KeyColor;
 
-        var slot = Inventory[color];
+        var slot = LocksmithHelperModule.LockSession.GetSlot(color);
         if (slot.Locked) {
             if (Type == KeyType.Unstar)
                 slot.Locked = false;

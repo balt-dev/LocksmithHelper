@@ -4,7 +4,8 @@ using Monocle;
 
 namespace Celeste.Mod.LocksmithHelper;
 
-public enum LockColor {
+public enum LockColor
+{
     White,
     Orange,
     Purple,
@@ -18,15 +19,15 @@ public enum LockColor {
     Master,
     Pure,
     Glitch,
-    Stone
+    Stone,
 }
 
 public static class LockExt {
     public static Color ToColor(this LockColor self, bool rawGlitch = false) {
         
         var glitchCol = 
-            Entities.Door.LastSpentColor != null && Entities.Door.LastSpentColor != LockColor.Glitch && !rawGlitch
-                ? ToColor((LockColor) Entities.Door.LastSpentColor, true)
+            LocksmithHelperModule.LockSession.LastSpentColor != null && LocksmithHelperModule.LockSession.LastSpentColor != LockColor.Glitch && !rawGlitch
+                ? ToColor((LockColor) LocksmithHelperModule.LockSession.LastSpentColor, true)
                 : new(0xA0, 0xA0, 0xA0);
         glitchCol.A = 255;
 
@@ -58,6 +59,6 @@ public static class LockExt {
     }
 
     public static bool IsDark(this LockColor self) {
-        return self is LockColor.Brown or LockColor.Black || self == LockColor.Glitch && Entities.Door.LastSpentColor is LockColor.Brown or LockColor.Black;
+        return self is LockColor.Brown or LockColor.Black || self == LockColor.Glitch && LocksmithHelperModule.LockSession.LastSpentColor is LockColor.Brown or LockColor.Black;
     }
 }

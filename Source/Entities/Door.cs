@@ -21,7 +21,7 @@ public class Door : Solid {
         public Rectangle? DrawBox;
 
         public readonly Complex? Cost(Complex copyMult, bool force = false) {
-            var invCount = Key.Inventory[Color].Count;
+            var invCount = LocksmithHelperModule.LockSession.GetSlot(Color).Count;
             if (Value == null) return invCount == 0 || force ? 0 : null;
             var value = (Complex) Value;
             if (invCount == 0 && !force) return null;
@@ -62,47 +62,55 @@ public class Door : Solid {
         }
     }
 
-    public static LockColor? LastSpentColor;
-
     private readonly LockColor _spend;
     public LockColor Spend { get {
         if (Cursed) return LockColor.Brown;
         if (_spend != LockColor.Glitch) return _spend;
-        return LastSpentColor ?? LockColor.Glitch;
+        return LocksmithHelperModule.LockSession.LastSpentColor ?? LockColor.Glitch;
     }}
     private readonly List<Requirement> _requirements;
     private readonly Complex _visualRequirementSum;
 
-    private static readonly MTexture doorAtlas = GFX.Game["objects/LocksmithHelper/door/atlas"];
+    private static MTexture doorAtlas = GFX.Game["objects/LocksmithHelper/door/atlas"];
     private static readonly MTexture[,] doorOutline = new MTexture[3, 3];
     private static readonly MTexture[,] doorInline = new MTexture[3, 3];
     private static readonly MTexture[,] doorOutlineInverse = new MTexture[3, 3];
     private static readonly MTexture[,] doorInlineInverse = new MTexture[3, 3];
-    private static readonly MTexture Keyhole = new(doorAtlas, new(12, 10, 4, 6));
-    private static readonly MTexture Blast = new(doorAtlas, new(22, 10, 6, 6));
-    private static readonly MTexture All = new(doorAtlas, new(16, 10, 6, 6));
+    private static readonly MTexture Keyhole = new(doorAtlas, new(48, 24, 4, 6));
+    private static readonly MTexture Blast = new(doorAtlas, new(48, 16, 6, 6));
+    private static readonly MTexture All = new(doorAtlas, new(56, 16, 6, 6));
     private static readonly MTexture[] Numbers = new MTexture[10];
-    private static readonly MTexture Plus = new(doorAtlas, new(33, 0, 3, 5));
-    private static readonly MTexture Minus = new(doorAtlas, new(36, 0, 3, 5));
-    private static readonly MTexture I = new(doorAtlas, new(33, 5, 3, 5));
-    private static readonly MTexture Times = new(doorAtlas, new(36, 5, 3, 5));
+    private static readonly MTexture Plus = new(doorAtlas, new(36, 24, 3, 4));
+    private static readonly MTexture Minus = new(doorAtlas, new(44, 24, 3, 4));
+    private static readonly MTexture Times = new(doorAtlas, new(8, 20, 3, 4));
+    private static readonly MTexture I = new(doorAtlas, new(16, 20, 3, 4));
+    private static readonly MTexture Eq = new(doorAtlas, new(24, 20, 3, 4));
+    private static readonly MTexture N = new(doorAtlas, new(32, 20, 3, 4));
+    private static readonly MTexture F = new(doorAtlas, new(40, 20, 3, 4));
+    private static readonly MTexture A = new(doorAtlas, new(44, 20, 3, 4));
     private static readonly MTexture FrozenTL = GFX.Game["objects/LocksmithHelper/door/frozen_tl"];
     private static readonly MTexture FrozenBR = GFX.Game["objects/LocksmithHelper/door/frozen_br"];
     private static readonly MTexture Erosion = GFX.Game["objects/LocksmithHelper/door/erosion"];
     private static readonly MTexture Paint = GFX.Game["objects/LocksmithHelper/door/paint"];
     private static readonly MTexture Gradient = GFX.Game["objects/LocksmithHelper/door/gradient"];
     private static readonly MTexture Static = GFX.Game["objects/LocksmithHelper/door/static"];
-   
 
-    static Door() {
-        for (var idx = 0; idx < 9; idx++) {
-            doorOutline[idx / 3, idx % 3] = new(doorAtlas, new(idx % 3 * 3, idx / 3 * 3, 3, 3));
-            doorInline[idx / 3, idx % 3] = new(doorAtlas, new(idx % 3 * 2, idx / 3 * 2 + 9, 2, 2));
-            doorOutlineInverse[idx / 3, idx % 3] = new(doorAtlas, new(idx % 3 * 3 + 9, idx / 3 * 3, 3, 3));
-            doorInlineInverse[idx / 3, idx % 3] = new(doorAtlas, new(idx % 3 * 2 + 6, idx / 3 * 2 + 9, 2, 2));
-        }
-        for (var n = 0; n < 10; n++)
-            Numbers[n] = new(doorAtlas, new(18 + n % 5 * 3, n / 5 * 5, 3, 5));
+    static Door() => RefreshTextures();
+
+    private static void RefreshTextures() {
+        doorAtlas = GFX.Game["objects/LocksmithHelper/door/atlas"];
+        for (int y = 0; y < 3; y++)
+            for (int x = 0; x < 3; x++) {
+                doorOutline[y, x] = new(doorAtlas, new(x * 4 + 4, y * 4 + 4, 3, 3));
+                doorInline[y, x] = new(doorAtlas, new(x * 4 + 36, y * 4 + 4, 2, 2));
+                doorOutlineInverse[y, x] = new(doorAtlas, new(x * 4 + 20, y * 4 + 4, 3, 3));
+                doorInlineInverse[y, x] = new(doorAtlas, new(x * 4 + 52, y * 4 + 4, 2, 2));
+            }
+        for (int y = 0; y < 2; y++)
+            for (int x = 0; x < 6; x++) {
+                if (y * 6 + x > 9) break;
+                Numbers[y * 6 + x] = new(doorAtlas, new(4 + x * 8, 16 + y * 8, 3, 4));
+            }
     }
 
 
@@ -152,6 +160,9 @@ public class Door : Solid {
     public Door(EntityData data, Vector2 offset)
         : base(data.Position + offset, data.Width, data.Height, false)
     {
+#if DEBUG
+        RefreshTextures();
+#endif
         Safe = false;
         Eroded = data.Bool("eroded");
         Frozen = data.Bool("frozen");
@@ -236,47 +247,49 @@ public class Door : Solid {
 
     // TODO: Clean this code up, it sucks.
     private void AuraCollide(Player player) {
-        if (Frozen && Key.Inventory[LockColor.Red].Count.Real >= 1) {
+        var session = LocksmithHelperModule.LockSession;
+        if (Frozen && session.GetSlot(LockColor.Red).Count.Real >= 1) {
             Frozen = false;
             Audio.Play("event:/game/09_core/iceball_break");
             Cooldown = 0.05f;
         }
-        if (Eroded && Key.Inventory[LockColor.Green].Count.Real >= 5) {
+        if (Eroded && session.GetSlot(LockColor.Green).Count.Real >= 5) {
             Eroded = false;
             Audio.Play("event:/game/04_cliffside/arrowblock_reappear");
             Cooldown = 0.05f;
         }
-        if (Painted && Key.Inventory[LockColor.Blue].Count.Real >= 3) {
+        if (Painted && session.GetSlot(LockColor.Blue).Count.Real >= 3) {
             Painted = false;
             Audio.Play("event:/game/04_cliffside/snowball_impact");
             Cooldown = 0.05f;
         }
-        if (!Cursed && !AnyIsColor(LockColor.Pure) && Key.Inventory[LockColor.Brown].Count.Real > 0) {
+        if (!Cursed && !AnyIsColor(LockColor.Pure) && session.GetSlot(LockColor.Brown).Count.Real > 0) {
             Cursed = true;
             Audio.Play("event:/game/03_resort/fallblock_wood_shake");
             Cooldown = 0.05f;
         }
-        if (Cursed && Key.Inventory[LockColor.Brown].Count.Real < 0) {
+        if (Cursed && session.GetSlot(LockColor.Brown).Count.Real < 0) {
             Cursed = false;
             Audio.Play("event:/game/03_resort/fallblock_wood_impact");
             Cooldown = 0.05f;
         }
     }
 
-    private static Complex ViewMult => LocksmithHelperModule.ImaginaryView ? Complex.ImaginaryOne : Complex.One; 
+    private static Complex ViewMult => LocksmithHelperModule.ImaginaryView ? Complex.ImaginaryOne : Complex.One;
 
     public void TryOpen(Vector2 pos) {
         if (Cooldown > 0) return;
         if (Eroded || Painted || Frozen) return;
+        var masterSlot = LocksmithHelperModule.LockSession.GetSlot(LockColor.Master);
 
         var oldCopies = Copies;
-        if (LocksmithHelperModule.MasterKeyReady && !AnyIsColor(LockColor.Master) && !AnyIsColor(LockColor.Pure) && Key.Inventory[LockColor.Master].Count.RealWithView() != 0) {
-            var rotatedCount = Key.Inventory[LockColor.Master].Count * ViewMult;
+        if (LocksmithHelperModule.MasterKeyReady && !AnyIsColor(LockColor.Master) && !AnyIsColor(LockColor.Pure) && masterSlot.Count.RealWithView() != 0) {
+            var rotatedCount = masterSlot.Count * ViewMult;
             var spentKeys = new Complex(Math.Sign(rotatedCount.Real), 0) / ViewMult;
             Copies -= spentKeys;
 
-            if (!Key.Inventory[LockColor.Master].Locked)
-                Key.Inventory[LockColor.Master].Count -= spentKeys;
+            if (!masterSlot.Locked)
+                masterSlot.Count -= spentKeys;
             goto End;
         }
 
@@ -287,9 +300,9 @@ public class Door : Solid {
         End:
         if (oldCopies != Copies) {
             Audio.Play("event:/game/general/wall_break_stone");
-            LocksmithHelperModule._masterReady = false;
+            LocksmithHelperModule.LockSession.MasterKeyEnabled = false;
             if (Copies == 0) {
-                LastSpentColor = Spend;
+                LocksmithHelperModule.LockSession.LastSpentColor = Spend;
                 RemoveSelf();
                 BreakParticle.Color = Spend.ToColor();
                 for (var x = 0; x < Width; x += 8)
@@ -312,9 +325,10 @@ public class Door : Solid {
 
             totalCost += (Complex) cost;
         }
-        
-        if (!Key.Inventory[Spend].Locked)
-            Key.Inventory[Spend].Count -= totalCost;
+        var spendSlot = LocksmithHelperModule.LockSession.GetSlot(Spend);
+
+        if (!spendSlot.Locked)
+            spendSlot.Count -= totalCost;
         if (imag) {
             if (Copies.Imaginary > 0)
                 Copies = new(Copies.Real, Copies.Imaginary - 1);
@@ -326,7 +340,7 @@ public class Door : Solid {
                 else
                     Copies = new(Copies.Real + 1, Copies.Imaginary);
         }
-        
+
         return true;
     }
 
@@ -360,28 +374,30 @@ public class Door : Solid {
             Rectangle rect = req.DrawBox ?? new Rectangle(6, 6, (int) Width - 12, (int) Height - 12);
             RenderColor(X + rect.X, Y + rect.Y, rect.Width, rect.Height, req.Color);
         }
-        
+
         bool? anySigils = null;
         Complex requirementSum = 0;
         foreach (var req in _requirements) {
             anySigils ??= false;
             Rectangle rect = req.DrawBox ?? new Rectangle(6, 6, (int) Width - 12, (int) Height - 12);
-            var displayValue = ((req.Value ?? 0) * CopyMult).RealWithView();
-            DrawSlices(displayValue < 0 ? doorInlineInverse : doorInline, X + rect.X, Y + rect.Y, rect.Width, rect.Height);
+            var value = (req.Value ?? Complex.Zero) * CopyMult;
+            if (value.RealWithView() == 0 && value != 0)
+                DrawSlices(doorInlineInverse, X + rect.X, Y + rect.Y, rect.Width, rect.Height, ColorExt.ColorFromHSV(Scene.TimeActive / 8, 1, 1));
+            else
+                DrawSlices(value.RealWithView() < 0 ? doorInlineInverse : doorInline, X + rect.X, Y + rect.Y, rect.Width, rect.Height);
             if (req.Value == null) {
                 anySigils = true;
                 continue;
             }
-            var value = (Complex) req.Value;
-            if ((!double.IsNaN(displayValue) || (double.IsNaN(value.Real) && double.IsNaN(value.Real))) && displayValue != 0) {
-                requirementSum += double.IsFinite(value.Real)
-                    && double.IsFinite(value.Imaginary)
+            if (double.IsNaN(value.RealWithView()) || value != Complex.Zero) {
+                requirementSum += (double.IsFinite(value.Real)
+                    && double.IsFinite(value.Imaginary))
                     ? value
-                    : Complex.IsNaN(value) ? 0 : new Complex(Math.Sign(value.Real), Math.Sign(value.Imaginary));
-                anySigils |= RenderSigil(Position + rect.Center.ToVector2(), value * CopyMult);
+                    : ((double.IsNaN(value.Real) || double.IsNaN(value.Imaginary)) ? 0 : new Complex(Math.Sign(value.Real), Math.Sign(value.Imaginary)));
+                anySigils |= RenderSigil(Position + rect.Center.ToVector2(), value, true);
             }
         }
-        
+
         DrawSlices(
             (requirementSum * CopyMult).RealWithView() < 0 || (anySigils == false) ? doorOutlineInverse : doorOutline,
             X, Y, Width, Height,
@@ -394,20 +410,20 @@ public class Door : Solid {
                     Erosion.Draw(
                         TopLeft + new Vector2(x, y), Vector2.Zero, Color.White, Vector2.One, 0,
                         new Rectangle(
-                            0, 0, 
-                            (int) (x + Erosion.Width > Width ? Width - x : Erosion.Width), 
+                            0, 0,
+                            (int) (x + Erosion.Width > Width ? Width - x : Erosion.Width),
                             (int) (y + Erosion.Height > Height ? Height - y : Erosion.Height)
                         )
                     );
-        
+
         if (Painted)
             for (var x = 0; x < Width; x += Paint.Width)
                 for (var y = 0; y < Height; y += Paint.Height)
                     Paint.Draw(
                         TopLeft + new Vector2(x, y), Vector2.Zero, Color.White, Vector2.One, 0,
                         new Rectangle(
-                            0, 0, 
-                            (int) (x + Paint.Width > Width ? Width - x : Paint.Width), 
+                            0, 0,
+                            (int) (x + Paint.Width > Width ? Width - x : Paint.Width),
                             (int) (y + Paint.Height > Height ? Height - y : Paint.Height)
                         )
                     );
@@ -424,12 +440,12 @@ public class Door : Solid {
                 new Rectangle(Math.Max(0, FrozenBR.Width - (int) Width), Math.Max(0, FrozenBR.Height - (int) Height), FrozenBR.Width, FrozenBR.Height)
             );
         }
-        
+
         if (Cooldown > 0)
             Draw.Rect(Collider, Color.White * (float) Math.Sqrt(Cooldown * 20));
 
         if (Copies != 1)
-            DrawComplex(Copies, TopCenter - new Vector2(0, 4), Color.White, true, true);
+            DrawComplex(Copies, TopCenter - new Vector2(0, 4), Color.White, true, Key.KeyType.Multiply, centered: true);
     }
 
     private static void DrawSlices(MTexture[,] slices, float x, float y, float width, float height, Color? color = null)
@@ -453,18 +469,22 @@ public class Door : Solid {
         slices[2, 2].Draw(new(x + borderWidth + internalWidth, y + borderHeight + internalHeight), Vector2.Zero, drawColor);
     }
 
-    public static void DrawComplex(Complex value, Vector2 center, Color color, bool outline = false, bool mult = false, bool centered = true) {
+    public static void DrawComplex(Complex value, Vector2 center, Color color, bool outline = false, Key.KeyType kind = Key.KeyType.Add, bool centered = true) {
+        string valueStr;
         if (double.IsInfinity(value.Real))
-            value = new(double.CopySign(808f, value.Real), value.Imaginary);
-        if (double.IsInfinity(value.Imaginary))
-            value = new(value.Real, double.CopySign(808f, value.Imaginary));
-        if (value != value)
-            value = new(12345, 54321);
-        var valueStr = value.AsString();
-        if (mult)
+            valueStr = "inf";
+        else if (double.IsInfinity(value.Imaginary))
+            valueStr = "infi";
+        else if (value != value)
+            valueStr = "nan";
+        else
+            valueStr = value.AsString();
+        if (kind == Key.KeyType.Multiply)
             valueStr = "x" + valueStr;
-        var width = valueStr.Length * 4 - 1;
-        var x = centered ? center.X - (float) width / 2 + 1 : center.X;
+        else if (kind == Key.KeyType.Set)
+            valueStr = "=" + valueStr;
+        var width = valueStr.Length * 4.0f - 2;
+        var x = MathF.Ceiling(centered ? center.X - (float) width / 2.0f + 1.0f : center.X);
 
         foreach (char chr in valueStr) {
             MTexture sprite;
@@ -475,16 +495,29 @@ public class Door : Solid {
                     '+' => Plus,
                     '-' => Minus,
                     'x' => Times,
+                    '=' => Eq,
                     'i' => I,
+                    'n' => N,
+                    'f' => F,
+                    'a' => A,
                     _ => null
                 };
             if (sprite == null) continue;
-            
-            if (outline)
-                sprite.DrawOutlineCentered(new(x, center.Y), color);
+
+            if (outline) {
+                sprite.DrawCentered(new(MathF.Floor(x) - 1, MathF.Floor(center.Y) - 1), Color.Black);
+                sprite.DrawCentered(new(MathF.Floor(x) - 1, MathF.Floor(center.Y) + 1), Color.Black);
+                sprite.DrawCentered(new(MathF.Floor(x) + 1, MathF.Floor(center.Y) - 1), Color.Black);
+                sprite.DrawCentered(new(MathF.Floor(x) + 1, MathF.Floor(center.Y) + 1), Color.Black);
+                sprite.DrawCentered(new(MathF.Floor(x), MathF.Floor(center.Y) - 1), Color.Black);
+                sprite.DrawCentered(new(MathF.Floor(x), MathF.Floor(center.Y) + 1), Color.Black);
+                sprite.DrawCentered(new(MathF.Floor(x) - 1, MathF.Floor(center.Y)), Color.Black);
+                sprite.DrawCentered(new(MathF.Floor(x) + 1, MathF.Floor(center.Y)), Color.Black);
+                sprite.DrawCentered(new(MathF.Floor(x), MathF.Floor(center.Y)), Color.White);
+            }
             else
-                sprite.DrawCentered(new(x, center.Y), color);
-            
+                sprite.DrawCentered(new(MathF.Floor(x), MathF.Floor(center.Y)), color);
+
             x += 4;
         }
     }
@@ -516,8 +549,8 @@ public class Door : Solid {
                         rand.Next(0, Static.Height - 16),
                         Math.Min(16, (int) width - u), Math.Min(16, (int) height - v)
                     ).Draw(new(x + u, y + v), Vector2.Zero, (color.IsDark() ? Color.White : Color.Black) * 0.3f);
-            if (LastSpentColor != null && LastSpentColor != LockColor.Glitch)
-                PostRender(x, y, width, height, (LockColor) LastSpentColor);
+            if (LocksmithHelperModule.LockSession.LastSpentColor != null && LocksmithHelperModule.LockSession.LastSpentColor != LockColor.Glitch)
+                PostRender(x, y, width, height, (LockColor) LocksmithHelperModule.LockSession.LastSpentColor);
         }
         else if (color is LockColor.Stone)
             for (var u = 0; u < width; u += 256)
@@ -528,7 +561,7 @@ public class Door : Solid {
                     ).Draw(new(x + u, y + v), Vector2.Zero, Color.Black * (Settings.Instance.DisableFlashes ? 0.05f : 0.3f));
     }
 
-    private static bool RenderSigil(Vector2 center, Complex value)
+    private static bool RenderSigil(Vector2 center, Complex value, bool outline)
     {
         MTexture sprite;
         if (value.RealWithView() == 0) return false;
@@ -543,7 +576,7 @@ public class Door : Solid {
         var sigilColor = value.RealWithView() < 0 ? Color.White : Color.Black;
         sprite.DrawCentered(center, sigilColor);
         if (sprite != Keyhole || Math.Abs(value.Real) == 1) return true;
-        DrawComplex(value, new(center.X, center.Y + 7), sigilColor);
+        DrawComplex(value, new(center.X, center.Y + 7), sigilColor, outline);
         return true;
     }
 

@@ -58,11 +58,9 @@ internal static partial class ComplexExt {
     [GeneratedRegex("^(?=[i\\d+-])([+-]?(?:\\d+)(?![i\\d]))?([+-]?(?:(?:\\d+))?i)?$")]
     private static partial Regex CompiledRegex();
 
-	
-
-    public static double RealWithView(this System.Numerics.Complex self)
+    public static double RealWithView(this Complex self)
         => LocksmithHelperModule.ImaginaryView ? self.Imaginary : self.Real;
     
-    public static double ImaginaryWithView(this System.Numerics.Complex self)
+    public static double ImaginaryWithView(this Complex self)
         => LocksmithHelperModule.ImaginaryView ? self.Real : self.Imaginary;
 }
